@@ -1,0 +1,179 @@
+# *********************************************
+# *** preparar espacio de trabajo ***
+# *********************************************
+
+# instalar Visual studio code
+
+# instalar CLI de azure
+# instalar para VSC extension de "Azure Developer CLI" y "Azure CLI Tools"
+
+# instalar wsl 
+wsl --list --online
+wsl --set-default-version 2
+wsl.exe --install -d Ubuntu # o instalar desde la tienda de microsoft
+# usando user001 y pass123 (se puede escoger credenciales a discresion)
+# instalar para VSC extension de "WSL"
+# en terminal el ubuntu wsl instalar docker 
+# primero actualizar paquetes
+sudo apt update
+
+# instalar docker
+# add the Docker repository, update the package lists, and then install Docker.
+sudo apt install apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install docker-ce docker-ce-cli containerd.io
+# add your user to the "docker" group to run Docker commands without using "sudo"
+sudo usermod -aG docker $USER
+# para verificar version de docker instalada
+docker --version
+
+# instalar git local desde la pagina https://git-scm.com/download/win
+# instalar git en wsl ubuntu desde la terminal
+sudo apt install git
+# para verificar version de Git instalada
+git --version
+# configurar git
+git config --global user.name "Your Name"
+
+
+# *********************************************
+# *** preparar git ***
+# *********************************************
+
+# buscar directorio donde se requiere sincornizar espacio de trabajo
+
+# configurar identidad del git
+git config --global user.name "Your Name"
+git config --global user.email "your_email@example.com"
+
+# iniciar repositorio git en carpeta proyecto
+git init
+
+# clonar repositorio git en carpeta proyecto
+# git clone <remote_repository>
+git clone https://github.com/elprincipitogauss/20230630_prueba_modelo.git
+
+# verificar commits pendientes por subir
+git status
+
+# agregar archivos que se desea incluir al repsoitorio
+git add .
+
+# commit los cambios realizados
+git commit -m "Initial commit"
+
+# indicar el uso de la rama principal
+git branch -M main
+
+# subir al repositorio remoto <remote_repository>
+# git remote add origin <remote_repository>
+git remote add origin https://github.com/elprincipitogauss/pruebas_azure.git
+
+# push los commits realizados
+# git -u push origin <branch_name>
+git -u push origin main
+# puede salir un protocolo de logeo
+
+# *********************************************
+# *** realizar conexion a azure ***
+# *********************************************
+
+# en el CLI de azure o en la terminal ejecutar la instruccion
+# depende de donde se realice el logeo el protocolo de login puede variar
+az login
+
+# *********************************************
+# *** revisar y configurar suscripcion ***
+# *********************************************
+
+# establecer la suscripcion de azure que se pretende usar para crear los srvicios y recursos
+# az account set --subscription <subscription_id>
+az account set --subscription f41c8b03-bdb2-40ec-b9aa-f238294159c1
+
+
+# *********************************************
+# *** crear recursos ***
+# *********************************************
+
+# Create a Resource Group: A resource group is a logical container for resources deployed within Azure. 
+# Crear grupo de recursos 
+# contenedor logico de recursos para administracion optima de los recursos desplegados
+# (resourcegrp_ammstest es un nombre a discresion para el grupo de recursos)
+# az group create -g <resources_group_id> --location <location>
+az group create -g resourcegrp_ammstest --location eastus
+
+# Create a storage account:
+# crear una cuenta de almacenamiento
+# az storage account create --name <storage_account_id> --location <location> --resource-group <resources_group_id> --sku Standard_LRS
+az storage account create --name storageacctammstest --location eastus --resource-group resourcegrp_ammstest --sku Standard_LRS
+
+# Create an Azure Kubernetes Service (AKS) Cluster: AKS provides a managed Kubernetes environment in Azure. Create an AKS cluster within your resource group. Specify the desired configuration, such as the number of nodes, VM size, and Kubernetes version.
+# tener presente si es necesario solicitar un aumento de cuota
+# <resource_group_name>: The name of the resource group you created or an existing one.
+# <cluster_name>: The name for your AKS cluster.
+# <node_count>: The desired number of nodes in the cluster.
+# <vm_size>: The VM size for the worker nodes, such as "Standard_DS2_v2" or "Standard_F4s".
+# <kubernetes_version>: The desired version of Kubernetes, such as "1.21.2" or "1.22.0".
+# az aks create --resource-group <resource_group_name> --name <cluster_name> --node-count <node_count> --node-vm-size <vm_size> --kubernetes-version <kubernetes_version>
+az aks create --resource-group resourcegrp_ammstest --name akscluster_ammstest --node-count 1 --node-vm-size Standard_DS2_v2 --kubernetes-version 1.25.6
+
+# Build and Containerize your Model: Package your trained model into a container image. Use a Dockerfile to define the container's dependencies and build instructions. using Azure Container Registry (ACR) Build
+# Create the Azure Container Registry
+# <registry_name> with a unique name for your ACR
+# <resource_group_name> with the resource group name
+# <sku> The pricing tier (SKU) for the ACR. You can choose from options like "Basic", "Standard", or "Premium"
+az acr create --name containerregammstest --resource-group resourcegrp_ammstest --sku Basic
+# Authenticate with the Azure Container Registry: Before you can use the Azure Container Registry, you need to authenticate with it
+az acr login -n containerregammstest --expose-token
+# build container image
+# <acr_name> name of your Azure Container Registry
+# navigate to the directory containing the Dockerfile and Python script
+cd Consultoria\SIC\pruebas\20230630_prueba_modelo\tets\imagenes\test\
+docker build -t containerregammstest.azurecr.io/hello-world:latest .
+# Push the Docker image to Azure Container Registry
+# <acr_name> name of your Azure Container Registry
+docker push containerregammstest.azurecr.io/hello-world:latest
+
+
+
+# Push the Container Image to a Container Registry: ACR is a private Docker container registry in Azure. Push your container image to ACR to store and manage it. Create an Azure Container Registry instance in your resource group
+
+# Deploy the Model as a Kubernetes Deployment: Define a Kubernetes Deployment manifest that specifies the container image, desired replica count, and other deployment settings. Apply the deployment manifest to your AKS cluster to start the deployment.
+
+# Expose the Deployment as a Service: To access your model as an API, you need to expose the Kubernetes deployment as a service. Create a Kubernetes Service manifest that defines the desired type (e.g., LoadBalancer, NodePort, or ClusterIP) and the target port.
+
+# Set up Ingress or Load Balancer: Depending on your requirements, you might need to set up Ingress or a Load Balancer to route external traffic to your API service.
+
+# Configure Networking and Security: Ensure that your AKS cluster and API service are properly secured, and configure network policies, ingress rules, and any necessary firewall rules.
+
+
+
+# *********************************************
+# *** backup scripts ***
+# *********************************************
+
+# Crear de Red y subredes virtuales, con ip las cuales son Privadas (par cumplir con la arquitectura Hub and Spoke)
+# (subnet_ammstest_001 y subnet_ammstest_002 son un nombre a discresion para las subredes)
+# Automáticamente se crea un nuevo servicio Azure Network Watcher para la region seleccionada y posteriormente se crea el grupo de recursos dedicado llamado NetworkWatcherRG y  para monitorear performance, realizar diagnosticos y gestionar problemas de trafico de red
+az network vnet create --address-prefixes 10.0.0.0/16 --name MyVirtualNetwork --resource-group resourcegrp_ammstest --subnet-name subnet_ammstest_001 --subnet-prefixes 10.0.1.0/24
+az network vnet create --address-prefixes 10.0.0.0/16 --name MyVirtualNetwork --resource-group resourcegrp_ammstest --subnet-name subnet_ammstest_002 --subnet-prefixes 10.0.2.0/24
+
+# to create the container and configure the webhook
+# "MyResourceGroup" with the name of the resource group created earlier.
+# "MyContainer" with the desired name for the container.
+# "MyImage" with the container image you want to use.
+# "RegistryUsername" and "RegistryPassword" with the credentials for your container registry (if needed).
+# "MyDNSLabel" with a unique DNS label for the container.
+# "YourWebhookURL" with the URL of the webhook you want to use.
+# Note that you need to provide a valid and accessible URL for the webhook.
+# az container create --resource-group MyResourceGroup --name MyContainer --image MyImage --registry-username RegistryUsername --registry-password RegistryPassword --dns-name-label MyDNSLabel --ports 80 --environment-variables "WEBHOOK_URL=YourWebhookURL"
+
+
+# *********************************************
+# *** consultas frecuentes ***
+# *********************************************
+
+# listar versiones disponibles de kubernetes
+az aks get-versions --location eastus --query "orchestrators" -o table

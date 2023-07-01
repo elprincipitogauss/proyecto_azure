@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+
+    text_classification:
+        build:
+            context: ./Text-tokenization
+            dockerfile: ./Dockerfile
+        container_name: text_classification_container_politicas
+        user: "root"
+        ports:
+            - "8202:8200"
+        environment:
+            - BERT_URL=http://tf-serving:8501
+
+
+    tf-serving:
+        build:
+            context: ./BERT
+            dockerfile: Dockerfile
+        container_name: bert_tf_serving_politicas
+        ports:
+        - "8501:8501"
+        - "8500:8500"
